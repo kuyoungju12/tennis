@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 동기화 테니스 대회 매니저 (Firebase)</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 0; margin: 0; background: #f0f2f5; color: #1c1e21; }
+        .header { background: #0f9d58; color: white; text-align: center; padding: 15px 0; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab-menu { display: flex; background: #fff; position: sticky; top: 48px; z-index: 99; border-bottom: 1px solid #ddd; }
+        .tab-menu button { flex: 1; padding: 14px 0; border: none; background: none; color: #606770; font-weight: bold; cursor: pointer; font-size: 0.85em; }
+        .tab-menu button.active { color: #0f9d58; border-bottom: 3px solid #0f9d58; }
+        .container { padding: 15px; max-width: 600px; margin: auto; padding-bottom: 100px; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h3 { margin-top: 0; border-left: 5px solid #0f9d58; padding-left: 10px; font-size: 1.05em; color: #0f9d58; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th, td { border: 1px solid #f0f2f5; padding: 12px 5px; text-align: center; }
+        th { background: #f8f9fa; color: #606770; font-weight: normal; }
+        tr:nth-child(even) { background-color: #fafafa; }
+        .input-group { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid #f0f2f5; }
+        input[type="number"] { width: 50px; text-align: center; padding: 10px; border: 1px solid #ccd0d5; border-radius: 6px; font-size: 1.2em; font-weight: bold; background: #f5f6f7; }
+        input[type="text"] { width: 80%; padding: 10px; border: 1px solid #ccd0d5; border-radius: 6px; font-size: 1em; }
+        .btn-main { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; font-size: 1em; }
+        .btn-save { background: #0f9d58; box-shadow: 0 2px 4px rgba(15, 157, 88, 0.3); }
+        .btn-reset { background: #f02849; margin-top: 40px; }
+        .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .order-item { padding: 15px; background: white; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .floating-save { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 500px; z-index: 101; }
+        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:flex; justify-content:center; align-items:center; z-index:999; font-weight:bold; color:#0f9d58; }
+    </style>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay">⏳ 파이어베이스 실시간 서버 연결 중...</div>
+<div class="header">🎾 테니스 라이브 매니저 (Firebase)</div>
+
+<div class="tab-menu">
+    <button class="tab-btn active" id="btn-setup" onclick="openTab('setup')">대회설정</button>
+    <button class="tab-btn" id="btn-order" onclick="openTab('order')">대진순서</button>
+    <button class="tab-btn" id="btn-matches" onclick="openTab('matches')">결과입력</button>
+    <button class="tab-btn" id="btn-rank" onclick="openTab('rank')">실시간순위</button>
+</div>
+
+<div class="container">
+    <div id="setup" class="content-section active">
+        <div class="card">
+            <h3>⚙️ 팀 수 설정</h3>
+            <div style="margin: 15px 0;">
+                참여 팀 수: <input type="number" id="teamCount" value="4" min="2" max="10" onchange="changeTeamCount()">
+            </div>
+            <h3>👥 팀 이름 수정</h3>
+            <div id="teamNameInputs" class="team-grid"></div>
+            <button class="btn-main btn-save" style="margin-top:20px;" onclick="saveConfigToFirebase()">설정 및 팀명 서버 저장</button>
+        </div>
+        <button class="btn-main btn-reset" onclick="resetFirebaseData()">서버 데이터 전체 초기화</button>
+    </div>
+
+    <div id="order" class="content-section">
+        <div id="orderList"></div>
+    </div>
+
+    <div id="matches" class="content-section">
+        <div id="matchList"></div>
+        <div class="floating-save">
+            <button class="btn-main btn-save" onclick="saveScoresToFirebase()">결과 실시간 서버 저장</button>
+        </div>
+    </div>
+
+    <div id="rank" class="content-section">
+        <div class="card">
+            <h3>📊 현재 순위표</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>팀명</th>
+                        <th>승/패</th>
+                        <th>승점</th>
+                        <th>득실차</th>
+                    </tr>
+                </thead>
+                <tbody id="rankBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    // ⚠️여기에 본인의 firebaseConfig 코드를 복사해서 붙여넣으세요!
+  const firebaseConfig = {
+    apiKey: "AIzaSyAIM7p3jJbc3twOy2FlMoWoIBAz0BabTDc",
+    authDomain: "tennismatch-16bc4.firebaseapp.com",
+    databaseURL: "https://tennismatch-16bc4-default-rtdb.firebaseio.com",
+    projectId: "tennismatch-16bc4",
+    storageBucket: "tennismatch-16bc4.firebasestorage.app",
+    messagingSenderId: "851643304657",
+    appId: "1:851643304657:web:c73282c9c117dba80353f0",
+    measurementId: "G-5DGNKXD8JC"
+  };
+
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dbRef = ref(db, 'tennis_tournament');
+
+    // 글로벌 전역 변수 선언 (함수들이 접근할 수 있도록 window 객체 바인딩)
+    window.teamCount = 4;
+    window.teamNames = ["1팀", "2팀", "3팀", "4팀"];
+    window.matches = [];
+    window.matchData = {};
+
+    // 탭 전환 함수
+    window.openTab = function(tabId) {
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.getElementById('btn-' + tabId).classList.add('active');
+        window.scrollTo(0, 0);
+    }
+
+    // [중요] 파이어베이스 데이터 실시간 동기화 리스너
+    // 서버의 데이터가 변경되면 연결된 전 세계 모든 기기의 화면이 자동으로 갱신됩니다.
+    onValue(dbRef, (snapshot) => {
+        document.getElementById('loading').style.display = 'flex';
+        const data = snapshot.val();
+        
+        if (data) {
+            window.teamCount = data.teamCount || 4;
+            window.teamNames = data.teamNames || ["1팀", "2팀", "3팀", "4팀"];
+            window.matchData = data.matchData || {};
+        } else {
+            // 최초 실행 시 기본 데이터 설정
+            window.teamCount = 4;
+            window.teamNames = ["A팀", "B팀", "C팀", "D팀"];
+            window.matchData = {};
+        }
+
+        document.getElementById('teamCount').value = window.teamCount;
+        generateMatchSchedule();
+        renderTeamInputs();
+        renderMatches();
+        renderOrder();
+        calculateRank();
+        
+        document.getElementById('loading').style.display = 'none';
+    });
+
+    function generateMatchSchedule() {
+        window.matches = [];
+        for (let i = 0; i < window.teamCount; i++) {
+            for (let j = i + 1; j < window.teamCount; j++) window.matches.push([i, j]);
+        }
+    }
+
+    function renderTeamInputs() {
+        const container = document.getElementById('teamNameInputs');
+        container.innerHTML = window.teamNames.map((name, i) => `
+            <div><input type="text" id="t-input-${i}" value="${name}" oninput="window.updateTeamNameMemory(${i}, this.value)"></div>
+        `).join('');
+    }
+
+    window.updateTeamNameMemory = function(index, value) {
+        window.teamNames[index] = value || `${index+1}팀`;
+    }
+
+    function renderMatches() {
+        const matchList = document.getElementById('matchList');
+        matchList.innerHTML = '<h3 style="background:white; padding:15px; border-radius:10px;">🎾 경기 결과 입력</h3>';
+        
+        window.matches.forEach((match, mIdx) => {
+            const scores = window.matchData[mIdx] || [[0,0], [0,0], [0,0]];
+            matchList.innerHTML += `
+                <div class="card" data-match-index="${mIdx}">
+                    <span style="font-weight:bold; color:#606770;">제 ${mIdx + 1}경기</span>
+                    <div style="margin: 10px 0; font-size:1.1em; font-weight:bold; color:#0f9d58; text-align:center;">
+                        ${window.teamNames[match[0]]} <small style="color:#999">vs</small> ${window.teamNames[match[1]]}
+                    </div>
+                    ${[0,1,2].map(sIdx => `
+                        <div class="input-group">
+                            <span style="font-size:0.9em; color:#606770;">${sIdx + 1}복식</span>
+                            <div>
+                                <input type="number" class="t1-s" value="${scores[sIdx][0]}" min="0" max="6" oninput="window.limitScore(this)">
+                                <span style="margin:0 10px; font-weight:bold;">:</span>
+                                <input type="number" class="t2-s" value="${scores[sIdx][1]}" min="0" max="6" oninput="window.limitScore(this)">
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        });
+    }
+
+    function renderOrder() {
+        const orderList = document.getElementById('orderList');
+        orderList.innerHTML = '<h3 style="background:white; padding:15px; border-radius:10px;">📅 경기 대진 순서</h3>';
+        orderList.innerHTML += window.matches.map((m, i) => `
+            <div class="order-item">
+                <span style="font-weight:bold; color:#606770;">제 ${i+1}경기</span>
+                <span style="font-size:1.1em; font-weight:bold;">${window.teamNames[m[0]]} <span style="color:#0f9d58; margin:0 5px;">VS</span> ${window.teamNames[m[1]]}</span>
+            </div>
+        `).join('');
+    }
+
+    window.limitScore = function(input) {
+        if (input.value < 0) input.value = 0;
+        if (input.value > 6) input.value = 6;
+    }
+
+    window.saveConfigToFirebase = function() {
+        set(dbRef, {
+            teamCount: window.teamCount,
+            teamNames: window.teamNames,
+            matchData: window.matchData
+        }).then(() => alert("대회 기본 설정이 서버에 저장되었습니다!"))
+          .catch(err => alert("저장 실패: " + err));
+    }
+
+    window.saveScoresToFirebase = function() {
+        document.querySelectorAll('#matchList .card').forEach((card) => {
+            const mIdx = card.getAttribute('data-match-index');
+            const t1 = Array.from(card.querySelectorAll('.t1-s')).map(i => parseInt(i.value) || 0);
+            const t2 = Array.from(card.querySelectorAll('.t2-s')).map(i => parseInt(i.value) || 0);
+            window.matchData[mIdx] = [[t1[0], t2[0]], [t1[1], t2[1]], [t1[2], t2[2]]];
+        });
+
+        set(dbRef, {
+            teamCount: window.teamCount,
+            teamNames: window.teamNames,
+            matchData: window.matchData
+        }).then(() => alert("경기 결과가 실시간으로 서버에 저장 및 브로드캐스팅 되었습니다!"))
+          .catch(err => alert("저장 실패: " + err));
+    }
+
+    window.changeTeamCount = function() {
+        const newCount = parseInt(document.getElementById('teamCount').value);
+        if (confirm("팀 수를 변경하면 서버의 기존 점수 데이터가 모두 포맷됩니다. 변경할까요?")) {
+            window.teamCount = newCount;
+            window.teamNames = Array.from({length: window.teamCount}, (_, i) => `${i+1}팀`);
+            window.matchData = {};
+            set(dbRef, {
+                teamCount: window.teamCount,
+                teamNames: window.teamNames,
+                matchData: window.matchData
+            });
+        } else {
+            document.getElementById('teamCount').value = window.teamCount;
+        }
+    }
+
+    function calculateRank() {
+        let stats = window.teamNames.map(name => ({ name, win: 0, loss: 0, points: 0, diff: 0 }));
+
+        window.matches.forEach((match, mIdx) => {
+            const scores = window.matchData[mIdx];
+            if (!scores) return;
+            let t1W = 0, t2W = 0, t1G = 0, t2G = 0;
+            scores.forEach(s => {
+                t1G += s[0]; t2G += s[1];
+                if (s[0] > s[1]) t1W++; else if (s[1] > s[0]) t2W++;
+            });
+            if (t1W > t2W) { stats[match[0]].win++; stats[match[0]].points += 3; stats[match[1]].loss++; }
+            else if (t2W > t1W) { stats[match[1]].win++; stats[match[1]].points += 3; stats[match[0]].loss++; }
+            stats[match[0]].diff += (t1G - t2G);
+            stats[match[1]].diff += (t2G - t1G);
+        });
+
+        stats.sort((a, b) => b.win - a.win || b.points - a.points || b.diff - a.diff);
+        document.getElementById('rankBody').innerHTML = stats.map(s => `
+            <tr>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.win}승 ${s.loss}패</td>
+                <td>${s.points}</td>
+                <td style="color: ${s.diff > 0 ? '#0f9d58' : s.diff < 0 ? '#f02849' : '#1c1e21'}">${s.diff > 0 ? '+' + s.diff : s.diff}</td>
+            </tr>
+        `).join('');
+    }
+
+    window.resetFirebaseData = function() {
+        if(confirm("서버의 모든 데이터를 공장초기화 상태로 되돌립니다. 진행할까요?")) {
+            set(dbRef, null).then(() => location.reload());
+        }
+    }
+</script>
+</body>
+</html>
