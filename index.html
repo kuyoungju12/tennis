@@ -3,13 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>실시간 동기화 테니스 대회 매니저 (Firebase)</title>
+    <title>실시간 동기화 테니스 대회 매니저 (Group Firebase)</title>
     <style>
         body { font-family: -apple-system, sans-serif; padding: 0; margin: 0; background: #f0f2f5; color: #1c1e21; }
         .header { background: #0f9d58; color: white; text-align: center; padding: 15px 0; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .tab-menu { display: flex; background: #fff; position: sticky; top: 48px; z-index: 99; border-bottom: 1px solid #ddd; }
+        
+        /* 조 선택 메뉴 스타일 추가 */
+        .group-menu { display: flex; background: #343a40; position: sticky; top: 48px; z-index: 99; padding: 4px; gap: 4px; }
+        .group-menu button { flex: 1; padding: 10px 0; border: none; background: none; color: #adb5bd; font-weight: bold; cursor: pointer; font-size: 0.95em; border-radius: 6px; }
+        .group-menu button.active { background: #0f9d58; color: white; }
+
+        /* 기존 탭 메뉴 위치 조정 (조 선택 메뉴 아래로 고정) */
+        .tab-menu { display: flex; background: #fff; position: sticky; top: 96px; z-index: 98; border-bottom: 1px solid #ddd; }
         .tab-menu button { flex: 1; padding: 14px 0; border: none; background: none; color: #606770; font-weight: bold; cursor: pointer; font-size: 0.85em; }
         .tab-menu button.active { color: #0f9d58; border-bottom: 3px solid #0f9d58; }
+        
         .container { padding: 15px; max-width: 600px; margin: auto; padding-bottom: 100px; }
         .content-section { display: none; }
         .content-section.active { display: block; }
@@ -36,6 +44,11 @@
 <div id="loading" class="loading-overlay">⏳ 파이어베이스 실시간 서버 연결 중...</div>
 <div class="header">🎾 테니스 라이브 매니저 (Firebase)</div>
 
+<div class="group-menu">
+    <button class="group-btn active" id="btn-groupA" onclick="switchGroup('groupA')">🅰️ A조 관리</button>
+    <button class="group-btn" id="btn-groupB" onclick="switchGroup('groupB')">🅱️ B조 관리</button>
+</div>
+
 <div class="tab-menu">
     <button class="tab-btn active" id="btn-setup" onclick="openTab('setup')">대회설정</button>
     <button class="tab-btn" id="btn-order" onclick="openTab('order')">대진순서</button>
@@ -46,15 +59,15 @@
 <div class="container">
     <div id="setup" class="content-section active">
         <div class="card">
-            <h3>⚙️ 팀 수 설정</h3>
+            <h3>⚙️ <span class="txt-current-group">A조</span> 팀 수 설정</h3>
             <div style="margin: 15px 0;">
                 참여 팀 수: <input type="number" id="teamCount" value="4" min="2" max="10" onchange="changeTeamCount()">
             </div>
-            <h3>👥 팀 이름 수정</h3>
+            <h3>👥 <span class="txt-current-group">A조</span> 팀 이름 수정</h3>
             <div id="teamNameInputs" class="team-grid"></div>
             <button class="btn-main btn-save" style="margin-top:20px;" onclick="saveConfigToFirebase()">설정 및 팀명 서버 저장</button>
         </div>
-        <button class="btn-main btn-reset" onclick="resetFirebaseData()">서버 데이터 전체 초기화</button>
+        <button class="btn-main btn-reset" onclick="resetFirebaseData()">현재 조 데이터 초기화</button>
     </div>
 
     <div id="order" class="content-section">
@@ -70,7 +83,7 @@
 
     <div id="rank" class="content-section">
         <div class="card">
-            <h3>📊 현재 순위표</h3>
+            <h3>📊 <span class="txt-current-group">A조</span> 현재 순위표</h3>
             <table>
                 <thead>
                     <tr>
@@ -90,26 +103,29 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // ⚠️여기에 본인의 firebaseConfig 코드를 복사해서 붙여넣으세요!
-  const firebaseConfig = {
-    apiKey: "AIzaSyAIM7p3jJbc3twOy2FlMoWoIBAz0BabTDc",
-    authDomain: "tennismatch-16bc4.firebaseapp.com",
-    databaseURL: "https://tennismatch-16bc4-default-rtdb.firebaseio.com",
-    projectId: "tennismatch-16bc4",
-    storageBucket: "tennismatch-16bc4.firebasestorage.app",
-    messagingSenderId: "851643304657",
-    appId: "1:851643304657:web:c73282c9c117dba80353f0",
-    measurementId: "G-5DGNKXD8JC"
-  };
+    // Firebase 설정
+    const firebaseConfig = {
+        apiKey: "AIzaSyAIM7p3jJbc3twOy2FlMoWoIBAz0BabTDc",
+        authDomain: "tennismatch-16bc4.firebaseapp.com",
+        databaseURL: "https://tennismatch-16bc4-default-rtdb.firebaseio.com",
+        projectId: "tennismatch-16bc4",
+        storageBucket: "tennismatch-16bc4.firebasestorage.app",
+        messagingSenderId: "851643304657",
+        appId: "1:851643304657:web:c73282c9c117dba80353f0",
+        measurementId: "G-5DGNKXD8JC"
+    };
 
     // Firebase 초기화
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const dbRef = ref(db, 'tennis_tournament');
 
-    // 글로벌 전역 변수 선언 (함수들이 접근할 수 있도록 window 객체 바인딩)
+    // 글로벌 전역 변수
+    window.currentGroup = 'groupA'; // 현재 선택된 조 ('groupA' 또는 'groupB')
+    window.allGroupData = {};      // 서버에서 가져온 전체 조 데이터 저장소
+    
     window.teamCount = 4;
-    window.teamNames = ["1팀", "2팀", "3팀", "4팀"];
+    window.teamNames = [];
     window.matches = [];
     window.matchData = {};
 
@@ -122,32 +138,65 @@
         window.scrollTo(0, 0);
     }
 
-    // [중요] 파이어베이스 데이터 실시간 동기화 리스너
-    // 서버의 데이터가 변경되면 연결된 전 세계 모든 기기의 화면이 자동으로 갱신됩니다.
+    // 조 전환 함수 추가
+    window.switchGroup = function(groupId) {
+        window.currentGroup = groupId;
+        document.querySelectorAll('.group-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-' + groupId).classList.add('active');
+        
+        // 조 변경에 따른 타이틀 텍스트 변경
+        const groupText = groupId === 'groupA' ? 'A조' : 'B조';
+        document.querySelectorAll('.txt-current-group').forEach(el => el.innerText = groupText);
+        
+        // 화면 리렌더링
+        renderCurrentGroup();
+    }
+
+    // 파이어베이스 데이터 실시간 동기화 리스너
     onValue(dbRef, (snapshot) => {
         document.getElementById('loading').style.display = 'flex';
         const data = snapshot.val();
         
-        if (data) {
-            window.teamCount = data.teamCount || 4;
-            window.teamNames = data.teamNames || ["1팀", "2팀", "3팀", "4팀"];
-            window.matchData = data.matchData || {};
-        } else {
-            // 최초 실행 시 기본 데이터 설정
-            window.teamCount = 4;
-            window.teamNames = ["A팀", "B팀", "C팀", "D팀"];
-            window.matchData = {};
+        window.allGroupData = data || {};
+
+        // A조 초기 데이터 구성
+        if (!window.allGroupData.groupA) {
+            window.allGroupData.groupA = {
+                teamCount: 4,
+                teamNames: ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"],
+                matchData: {}
+            };
+        }
+        // B조 초기 데이터 구성
+        if (!window.allGroupData.groupB) {
+            window.allGroupData.groupB = {
+                teamCount: 4,
+                teamNames: ["B조 1팀", "B조 2팀", "B조 3팀", "B조 4팀"],
+                matchData: {}
+            };
         }
 
+        // 현재 선택된 조의 데이터를 기준으로 렌더링 실행
+        renderCurrentGroup();
+        document.getElementById('loading').style.display = 'none';
+    });
+
+    // 현재 선택된 조의 데이터를 로드하여 화면을 그리는 함수
+    function renderCurrentGroup() {
+        const groupData = window.allGroupData[window.currentGroup];
+        
+        window.teamCount = groupData.teamCount || 4;
+        window.teamNames = groupData.teamNames || [];
+        window.matchData = groupData.matchData || {};
+
         document.getElementById('teamCount').value = window.teamCount;
+        
         generateMatchSchedule();
         renderTeamInputs();
         renderMatches();
         renderOrder();
         calculateRank();
-        
-        document.getElementById('loading').style.display = 'none';
-    });
+    }
 
     function generateMatchSchedule() {
         window.matches = [];
@@ -164,12 +213,13 @@
     }
 
     window.updateTeamNameMemory = function(index, value) {
-        window.teamNames[index] = value || `${index+1}팀`;
+        const prefix = window.currentGroup === 'groupA' ? 'A조' : 'B조';
+        window.teamNames[index] = value || `${prefix} ${index+1}팀`;
     }
 
     function renderMatches() {
         const matchList = document.getElementById('matchList');
-        matchList.innerHTML = '<h3 style="background:white; padding:15px; border-radius:10px;">🎾 경기 결과 입력</h3>';
+        matchList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">🎾 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 결과 입력</h3>`;
         
         window.matches.forEach((match, mIdx) => {
             const scores = window.matchData[mIdx] || [[0,0], [0,0], [0,0]];
@@ -196,7 +246,7 @@
 
     function renderOrder() {
         const orderList = document.getElementById('orderList');
-        orderList.innerHTML = '<h3 style="background:white; padding:15px; border-radius:10px;">📅 경기 대진 순서</h3>';
+        orderList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">📅 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 대진 순서</h3>`;
         orderList.innerHTML += window.matches.map((m, i) => `
             <div class="order-item">
                 <span style="font-weight:bold; color:#606770;">제 ${i+1}경기</span>
@@ -210,15 +260,18 @@
         if (input.value > 6) input.value = 6;
     }
 
+    // 현재 조의 설정을 Firebase의 해당 조 경로에 저장
     window.saveConfigToFirebase = function() {
-        set(dbRef, {
+        const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+        set(groupSpecificRef, {
             teamCount: window.teamCount,
             teamNames: window.teamNames,
             matchData: window.matchData
-        }).then(() => alert("대회 기본 설정이 서버에 저장되었습니다!"))
+        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 기본 설정이 서버에 저장되었습니다!`))
           .catch(err => alert("저장 실패: " + err));
     }
 
+    // 현재 조의 점수를 Firebase의 해당 조 경로에 저장
     window.saveScoresToFirebase = function() {
         document.querySelectorAll('#matchList .card').forEach((card) => {
             const mIdx = card.getAttribute('data-match-index');
@@ -227,21 +280,26 @@
             window.matchData[mIdx] = [[t1[0], t2[0]], [t1[1], t2[1]], [t1[2], t2[2]]];
         });
 
-        set(dbRef, {
+        const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+        set(groupSpecificRef, {
             teamCount: window.teamCount,
             teamNames: window.teamNames,
             matchData: window.matchData
-        }).then(() => alert("경기 결과가 실시간으로 서버에 저장 및 브로드캐스팅 되었습니다!"))
+        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 결과가 실시간으로 서버에 저장 및 브로드캐스팅 되었습니다!`))
           .catch(err => alert("저장 실패: " + err));
     }
 
+    // 현재 조의 팀 수 변경
     window.changeTeamCount = function() {
         const newCount = parseInt(document.getElementById('teamCount').value);
-        if (confirm("팀 수를 변경하면 서버의 기존 점수 데이터가 모두 포맷됩니다. 변경할까요?")) {
+        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
+        if (confirm(`${groupText}의 팀 수를 변경하면 해당 조의 기존 점수 데이터가 모두 초기화됩니다. 변경할까요?`)) {
             window.teamCount = newCount;
-            window.teamNames = Array.from({length: window.teamCount}, (_, i) => `${i+1}팀`);
+            window.teamNames = Array.from({length: window.teamCount}, (_, i) => `${groupText} ${i+1}팀`);
             window.matchData = {};
-            set(dbRef, {
+            
+            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+            set(groupSpecificRef, {
                 teamCount: window.teamCount,
                 teamNames: window.teamNames,
                 matchData: window.matchData
@@ -279,9 +337,19 @@
         `).join('');
     }
 
+    // 전체가 아닌 '현재 선택된 조'만 공장 초기화
     window.resetFirebaseData = function() {
-        if(confirm("서버의 모든 데이터를 공장초기화 상태로 되돌립니다. 진행할까요?")) {
-            set(dbRef, null).then(() => location.reload());
+        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
+        if(confirm(`서버의 [${groupText}] 데이터를 최초 초기화 상태로 되돌립니다. 진행할까요?`)) {
+            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+            const defaultData = {
+                teamCount: 4,
+                teamNames: window.currentGroup === 'groupA' ? ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"] : ["B조 1팀", "B조 2팀", "B조 3팀", "B조 4팀"],
+                matchData: {}
+            };
+            set(groupSpecificRef, defaultData).then(() => {
+                alert(`${groupText} 데이터가 초기화되었습니다.`);
+            });
         }
     }
 </script>
