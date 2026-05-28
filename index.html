@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>근로복지공단 테니스대회 매니저/title>
+    <title>실시간 동기화 테니스 대회 매니저 (Group Firebase)</title>
     <style>
         body { font-family: -apple-system, sans-serif; padding: 0; margin: 0; background: #f0f2f5; color: #1c1e21; }
         .header { background: #0f9d58; color: white; text-align: center; padding: 15px 0; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -33,17 +33,10 @@
         .btn-main { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; font-size: 1em; }
         .btn-save { background: #0f9d58; box-shadow: 0 2px 4px rgba(15, 157, 88, 0.3); }
         .btn-reset { background: #f02849; margin-top: 40px; }
-        .team-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .order-item { padding: 15px; background: white; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .floating-save { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 500px; z-index: 101; }
         .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:flex; justify-content:center; align-items:center; z-index:999; font-weight:bold; color:#0f9d58; }
-        
-        .team-card { border: 1px solid #ccd0d5; padding: 15px; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .player-inputs-box { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9em; }
-        .player-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-        .player-row:last-child { margin-bottom: 0; }
-        .player-row span { width: 55px; font-weight: bold; color: #4e555d; font-size: 0.9em; }
-        .player-row input { flex: 1; padding: 8px; border: 1px solid #ccd0d5; border-radius: 6px; font-size: 0.9em; width: 40%; }
     </style>
 </head>
 <body>
@@ -52,7 +45,7 @@
 <div class="header">🎾 근로복지공단 테니스대회(5.30)</div>
 
 <div class="group-menu">
-    <button class="group-btn" id="btn-groupA" onclick="switchGroup('groupA')">🅰️ A조 관리</button>
+    <button class="group-btn active" id="btn-groupA" onclick="switchGroup('groupA')">🅰️ A조 관리</button>
     <button class="group-btn" id="btn-groupB" onclick="switchGroup('groupB')">🅱️ B조 관리</button>
 </div>
 
@@ -70,17 +63,10 @@
             <div style="margin: 15px 0;">
                 참여 팀 수: <input type="number" id="teamCount" value="4" min="2" max="10" onchange="changeTeamCount()">
             </div>
-            <h3>👥 <span class="txt-current-group">A조</span> 팀 이름 및 선수 등록</h3>
+            <h3>👥 <span class="txt-current-group">A조</span> 팀 이름 수정</h3>
             <div id="teamNameInputs" class="team-grid"></div>
+            <button class="btn-main btn-save" style="margin-top:20px;" onclick="saveConfigToFirebase()">설정 및 팀명 서버 저장</button>
         </div>
-
-        <div class="card">
-            <h3>📅 <span class="txt-current-group">A조</span> 대진 순서 및 매치 지정</h3>
-            <div id="setupMatchOrder"></div>
-            
-            <button class="btn-main btn-save" style="margin-top:25px;" onclick="saveConfigToFirebase()">설정, 선수명, 대진순서 서버 저장</button>
-        </div>
-
         <button class="btn-main btn-reset" onclick="resetFirebaseData()">현재 조 데이터 초기화</button>
     </div>
 
@@ -114,18 +100,10 @@
 </div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // [최종 방어막] 파이어베이스 지연 여부와 무관하게 3초 뒤 로딩 강제 강제 해제
-    setTimeout(() => {
-        const loadingEl = document.getElementById('loading');
-        if (loadingEl && loadingEl.style.display !== 'none') {
-            console.warn("Firebase 동기화 지연으로 로딩 마스크가 안전 모드로 강제 해제되었습니다.");
-            loadingEl.style.display = 'none';
-        }
-    }, 3000);
-
+    // Firebase 설정
     const firebaseConfig = {
         apiKey: "AIzaSyAIM7p3jJbc3twOy2FlMoWoIBAz0BabTDc",
         authDomain: "tennismatch-16bc4.firebaseapp.com",
@@ -137,25 +115,27 @@
         measurementId: "G-5DGNKXD8JC"
     };
 
+    // Firebase 초기화
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const dbRef = ref(db, 'tennis_tournament');
 
+    // 글로벌 전역 변수
     window.currentGroup = 'groupA'; 
     window.allGroupData = {};      
     
     window.teamCount = 4;
     window.teamNames = [];
-    window.teamPlayers = []; 
-    window.matches = [];     
+    window.matches = [];
     window.matchData = {};
 
+    // 탭 전환 함수 (대회설정 시 비밀번호 보안 추가)
     window.openTab = function(tabId) {
         if (tabId === 'setup') {
             const pw = prompt("대회설정 메뉴에 진입하려면 관리자 비밀번호를 입력하세요.");
             if (pw !== "340") {
                 alert("비밀번호가 일치하지 않습니다.");
-                return;
+                return; // 탭 전환 차단
             }
         }
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
@@ -165,6 +145,7 @@
         window.scrollTo(0, 0);
     }
 
+    // 조 전환 함수
     window.switchGroup = function(groupId) {
         window.currentGroup = groupId;
         document.querySelectorAll('.group-btn').forEach(b => b.classList.remove('active'));
@@ -176,157 +157,201 @@
         renderCurrentGroup();
     }
 
-    // 데이터 수신 리스너 구조적 예외 처리 전면 보완
+    // 파이어베이스 데이터 실시간 동기화 리스너
     onValue(dbRef, (snapshot) => {
-        try {
-            const data = snapshot.val();
-            window.allGroupData = data || {};
+        document.getElementById('loading').style.display = 'flex';
+        const data = snapshot.val();
+        
+        window.allGroupData = data || {};
 
-            if (!window.allGroupData.groupA) {
-                window.allGroupData.groupA = { teamCount: 4, teamNames: ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"], matchData: {} };
-            }
-            if (!window.allGroupData.groupB) {
-                window.allGroupData.groupB = { teamCount: 4, teamNames: ["B조 1팀", "B조 2팀", "B조 3팀", "B조 4팀"], matchData: {} };
-            }
-
-            renderCurrentGroup();
-        } catch (err) {
-            console.error("데이터 동기화 및 해석 중 에러 발생:", err);
-        } finally {
-            document.getElementById('loading').style.display = 'none';
+        if (!window.allGroupData.groupA) {
+            window.allGroupData.groupA = {
+                teamCount: 4,
+                teamNames: ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"],
+                matchData: {}
+            };
         }
-    }, (error) => {
-        console.error("파이어베이스 서버 연결 자체에 실패했습니다:", error);
+        if (!window.allGroupData.groupB) {
+            window.allGroupData.groupB = {
+                teamCount: 4,
+                teamNames: ["B조 1팀", "B조 2팀", "B조 3팀", "B조 4팀"],
+                matchData: {}
+            };
+        }
+
+        renderCurrentGroup();
         document.getElementById('loading').style.display = 'none';
     });
 
     function renderCurrentGroup() {
-        try {
-            const groupData = window.allGroupData[window.currentGroup] || {};
-            window.teamCount = parseInt(groupData.teamCount) || 4;
-            
-            // 1. 팀 이름 정형 가공
-            let rawNames = groupData.teamNames;
-            window.teamNames = [];
-            if (Array.isArray(rawNames)) {
-                window.teamNames = [...rawNames];
-            } else if (rawNames && typeof rawNames === 'object') {
-                for (let i = 0; i < window.teamCount; i++) window.teamNames[i] = rawNames[i];
-            }
-            for (let i = 0; i < window.teamCount; i++) {
-                if (!window.teamNames[i]) window.teamNames[i] = `${window.currentGroup === 'groupA' ? 'A조' : 'B조'} ${i + 1}팀`;
-            }
-            
-            // 2. 복식 선수 명단 정형 가공
-            let rawPlayers = groupData.teamPlayers;
-            window.teamPlayers = [];
-            if (Array.isArray(rawPlayers)) {
-                window.teamPlayers = [...rawPlayers];
-            } else if (rawPlayers && typeof rawPlayers === 'object') {
-                for (let i = 0; i < window.teamCount; i++) window.teamPlayers[i] = rawPlayers[i];
-            }
-            for (let i = 0; i < window.teamCount; i++) {
-                if (!window.teamPlayers[i]) window.teamPlayers[i] = {};
-                if (!window.teamPlayers[i].d1 || !Array.isArray(window.teamPlayers[i].d1)) window.teamPlayers[i].d1 = ["", ""];
-                if (!window.teamPlayers[i].d2 || !Array.isArray(window.teamPlayers[i].d2)) window.teamPlayers[i].d2 = ["", ""];
-                if (!window.teamPlayers[i].d3 || !Array.isArray(window.teamPlayers[i].d3)) window.teamPlayers[i].d3 = ["", ""];
-            }
+        const groupData = window.allGroupData[window.currentGroup];
+        
+        window.teamCount = groupData.teamCount || 4;
+        window.teamNames = groupData.teamNames || [];
+        window.matchData = groupData.matchData || {};
 
-            window.matchData = groupData.matchData || {};
-            
-            // 3. 대진 리스트 정형 가공
-            let rawMatches = groupData.matches;
-            window.matches = [];
-            if (Array.isArray(rawMatches)) {
-                window.matches = rawMatches.map(m => {
-                    let matchArray = Array.isArray(m) ? [...m] : [0, 1, ""];
-                    if (matchArray.length < 3) matchArray.push("");
-                    return matchArray;
-                });
-            } else if (rawMatches && typeof rawMatches === 'object') {
-                Object.keys(rawMatches).sort((a,b) => Number(a) - Number(b)).forEach(k => {
-                    let m = rawMatches[k];
-                    let matchArray = Array.isArray(m) ? [...m] : [0, 1, ""];
-                    if (matchArray.length < 3) matchArray.push("");
-                    window.matches.push(matchArray);
-                });
-            }
-
-            if (window.matches.length === 0) {
-                generateDefaultMatchSchedule();
-            }
-
-            const tcInput = document.getElementById('teamCount');
-            if(tcInput) tcInput.value = window.teamCount;
-            
-            renderTeamInputs();
-            renderSetupMatchOrder();
-            renderMatches();
-            renderOrder();
-            calculateRank();
-            
-        } catch (e) {
-            console.error("UI 렌더링 스크립트 치명적 예외 안전 차단:", e);
-        }
+        document.getElementById('teamCount').value = window.teamCount;
+        
+        generateMatchSchedule();
+        renderTeamInputs();
+        renderMatches();
+        renderOrder();
+        calculateRank();
     }
 
-    function generateDefaultMatchSchedule() {
+    function generateMatchSchedule() {
         window.matches = [];
         for (let i = 0; i < window.teamCount; i++) {
-            for (let j = i + 1; j < window.teamCount; j++) window.matches.push([i, j, ""]);
+            for (let j = i + 1; j < window.teamCount; j++) window.matches.push([i, j]);
         }
     }
 
     function renderTeamInputs() {
         const container = document.getElementById('teamNameInputs');
-        if(!container) return;
-        container.innerHTML = window.teamNames.map((name, i) => {
-            const p = window.teamPlayers[i] || { d1: ["", ""], d2: ["", ""], d3: ["", ""] };
-            return `
-                <div class="team-card">
-                    <span style="font-weight:bold; color:#0f9d58; font-size:0.95em; display:block; margin-bottom:5px;">팀 ${i+1} 이름</span>
-                    <input type="text" id="t-input-${i}" value="${name}" oninput="window.updateTeamNameMemory(${i}, this.value)" style="width:95%; font-weight:bold; margin-bottom:8px; padding:6px; border:1px solid #ccd0d5; border-radius:4px;">
-                    
-                    <div class="player-inputs-box">
-                        <div style="font-weight:bold; margin-bottom:6px; color:#606770; font-size:0.85em;">👥 복식 선수 명단 등록 (각 조 2명씩 입력)</div>
-                        <div class="player-row">
-                            <span>1복식</span>
-                            <input type="text" value="${p.d1 ? p.d1[0]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd1', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d1 ? p.d1[1]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd1', 1, this.value)" placeholder="선수 2">
-                        </div>
-                        <div class="player-row">
-                            <span>2복식</span>
-                            <input type="text" value="${p.d2 ? p.d2[0]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd2', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d2 ? p.d2[1]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd2', 1, this.value)" placeholder="선수 2">
-                        </div>
-                        <div class="player-row">
-                            <span>3복식</span>
-                            <input type="text" value="${p.d3 ? p.d3[0]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd3', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d3 ? p.d3[1]||'' : ''}" oninput="window.updatePlayerMemory(${i}, 'd3', 1, this.value)" placeholder="선수 2">
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        container.innerHTML = window.teamNames.map((name, i) => `
+            <div><input type="text" id="t-input-${i}" value="${name}" oninput="window.updateTeamNameMemory(${i}, this.value)"></div>
+        `).join('');
     }
 
     window.updateTeamNameMemory = function(index, value) {
         const prefix = window.currentGroup === 'groupA' ? 'A조' : 'B조';
         window.teamNames[index] = value || `${prefix} ${index+1}팀`;
-        renderSetupMatchOrder(); 
     }
 
-    window.updatePlayerMemory = function(teamIdx, doublesKey, playerIdx, value) {
-        if(window.teamPlayers[teamIdx] && window.teamPlayers[teamIdx][doublesKey]) {
-            window.teamPlayers[teamIdx][doublesKey][playerIdx] = value;
+    function renderMatches() {
+        const matchList = document.getElementById('matchList');
+        matchList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">🎾 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 결과 입력</h3>`;
+        
+        window.matches.forEach((match, mIdx) => {
+            const scores = window.matchData[mIdx] || [[0,0], [0,0], [0,0]];
+            matchList.innerHTML += `
+                <div class="card" data-match-index="${mIdx}">
+                    <span style="font-weight:bold; color:#606770;">제 ${mIdx + 1}경기</span>
+                    <div style="margin: 10px 0; font-size:1.1em; font-weight:bold; color:#0f9d58; text-align:center;">
+                        ${window.teamNames[match[0]]} <small style="color:#999">vs</small> ${window.teamNames[match[1]]}
+                    </div>
+                    ${[0,1,2].map(sIdx => `
+                        <div class="input-group">
+                            <span style="font-size:0.9em; color:#606770;">${sIdx + 1}복식</span>
+                            <div>
+                                <input type="number" class="t1-s" value="${scores[sIdx][0]}" min="0" max="6" oninput="window.limitScore(this)">
+                                <span style="margin:0 10px; font-weight:bold;">:</span>
+                                <input type="number" class="t2-s" value="${scores[sIdx][1]}" min="0" max="6" oninput="window.limitScore(this)">
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        });
+    }
+
+    function renderOrder() {
+        const orderList = document.getElementById('orderList');
+        orderList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">📅 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 대진 순서</h3>`;
+        orderList.innerHTML += window.matches.map((m, i) => `
+            <div class="order-item">
+                <span style="font-weight:bold; color:#606770;">제 ${i+1}경기</span>
+                <span style="font-size:1.1em; font-weight:bold;">${window.teamNames[m[0]]} <span style="color:#0f9d58; margin:0 5px;">VS</span> ${window.teamNames[m[1]]}</span>
+            </div>
+        `).join('');
+    }
+
+    window.limitScore = function(input) {
+        if (input.value < 0) input.value = 0;
+        if (input.value > 6) input.value = 6;
+    }
+
+    window.saveConfigToFirebase = function() {
+        const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+        set(groupSpecificRef, {
+            teamCount: window.teamCount,
+            teamNames: window.teamNames,
+            matchData: window.matchData
+        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 기본 설정이 서버에 저장되었습니다!`))
+          .catch(err => alert("저장 실패: " + err));
+    }
+
+    window.saveScoresToFirebase = function() {
+        document.querySelectorAll('#matchList .card').forEach((card) => {
+            const mIdx = card.getAttribute('data-match-index');
+            const t1 = Array.from(card.querySelectorAll('.t1-s')).map(i => parseInt(i.value) || 0);
+            const t2 = Array.from(card.querySelectorAll('.t2-s')).map(i => parseInt(i.value) || 0);
+            window.matchData[mIdx] = [[t1[0], t2[0]], [t1[1], t2[1]], [t1[2], t2[2]]];
+        });
+
+        const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+        set(groupSpecificRef, {
+            teamCount: window.teamCount,
+            teamNames: window.teamNames,
+            matchData: window.matchData
+        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 결과가 실시간으로 서버에 저장 및 브로드캐스팅 되었습니다!`))
+          .catch(err => alert("저장 실패: " + err));
+    }
+
+    window.changeTeamCount = function() {
+        const newCount = parseInt(document.getElementById('teamCount').value);
+        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
+        if (confirm(`${groupText}의 팀 수를 변경하면 해당 조의 기존 점수 데이터가 모두 초기화됩니다. 변경할까요?`)) {
+            window.teamCount = newCount;
+            window.teamNames = Array.from({length: window.teamCount}, (_, i) => `${groupText} ${i+1}팀`);
+            window.matchData = {};
+            
+            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+            set(groupSpecificRef, {
+                teamCount: window.teamCount,
+                teamNames: window.teamNames,
+                matchData: window.matchData
+            });
+        } else {
+            document.getElementById('teamCount').value = window.teamCount;
         }
     }
 
-    function renderSetupMatchOrder() {
-        const container = document.getElementById('setupMatchOrder');
-        if(!container) return;
-        let html = `<div style="margin-bottom:12px; font-size:0.85em; color:#606770;">각 경기 순서에 따라 대결할 팀들과 지정 코트를 입력해 주세요.</div>`;
-        
-        window.matches.forEach((match, idx) => {
-            let options1 = window.teamNames.map((name, tIdx) => `<option value="${tIdx}" ${match[0] == tIdx ? 'selected' : ''}>${name}</option>`).join('');
-            let options2 =
+    function calculateRank() {
+        let stats = window.teamNames.map(name => ({ name, win: 0, loss: 0, points: 0, diff: 0 }));
+
+        window.matches.forEach((match, mIdx) => {
+            const scores = window.matchData[mIdx];
+            if (!scores) return;
+            let t1W = 0, t2W = 0, t1G = 0, t2G = 0;
+            scores.forEach(s => {
+                t1G += s[0]; t2G += s[1];
+                if (s[0] > s[1]) t1W++; else if (s[1] > s[0]) t2W++;
+            });
+            if (t1W > t2W) { stats[match[0]].win++; stats[match[0]].points += 3; stats[match[1]].loss++; }
+            else if (t2W > t1W) { stats[match[1]].win++; stats[match[1]].points += 3; stats[match[0]].loss++; }
+            stats[match[0]].diff += (t1G - t2G);
+            stats[match[1]].diff += (t2G - t1G);
+        });
+
+        stats.sort((a, b) => b.win - a.win || b.points - a.points || b.diff - a.diff);
+        document.getElementById('rankBody').innerHTML = stats.map(s => `
+            <tr>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.win}승 ${s.loss}패</td>
+                <td>${s.points}</td>
+                <td style="color: ${s.diff > 0 ? '#0f9d58' : s.diff < 0 ? '#f02849' : '#1c1e21'}">${s.diff > 0 ? '+' + s.diff : s.diff}</td>
+            </tr>
+        `).join('');
+    }
+
+    // 데이터 초기화 문구 수정 적용 완료
+    window.resetFirebaseData = function() {
+        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
+        if(confirm("지금까지 입력한 모든 자료가 지워집니다. 그래도 초기화하시겠습니까?")) {
+            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
+            const defaultData = {
+                teamCount: 4,
+                teamNames: window.currentGroup === 'groupA' ? ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"] : ["B조 1팀", "B조 2팀", "B조 3팀", "B조 4팀"],
+                matchData: {}
+            };
+            set(groupSpecificRef, defaultData).then(() => {
+                alert(`${groupText} 데이터가 완전히 초기화되었습니다.`);
+                // 안전을 위해 대진순서 탭으로 튕겨냄
+                window.openTab('order');
+            });
+        }
+    }
+</script>
+</body>
+</html>
