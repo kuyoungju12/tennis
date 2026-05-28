@@ -38,12 +38,13 @@
         .floating-save { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 500px; z-index: 101; }
         .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:flex; justify-content:center; align-items:center; z-index:999; font-weight:bold; color:#0f9d58; }
         
-        /* 복식 선수 입력칸용 스타일 */
-        .player-inputs-box { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 8px; font-size: 0.9em; }
-        .player-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        /* 개별 팀 카드 및 복식 선수 명단 등록 창 스타일 정의 */
+        .team-card { border: 1px solid #ccd0d5; padding: 15px; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .player-inputs-box { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9em; }
+        .player-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .player-row:last-child { margin-bottom: 0; }
-        .player-row span { width: 50px; font-weight: bold; color: #4e555d; }
-        .player-row input { flex: 1; padding: 6px; border: 1px solid #ccd0d5; border-radius: 4px; font-size: 0.9em; }
+        .player-row span { width: 55px; font-weight: bold; color: #4e555d; font-size: 0.9em; }
+        .player-row input { flex: 1; padding: 8px; border: 1px solid #ccd0d5; border-radius: 6px; font-size: 0.9em; width: 40%; }
     </style>
 </head>
 <body>
@@ -139,8 +140,8 @@
     
     window.teamCount = 4;
     window.teamNames = [];
-    window.teamPlayers = []; // 팀별 복식 명단 저장소
-    window.matches = [];     // 사용자 정의/자동생성 대진 배열 (인덱스2에 코트 정보 추가)
+    window.teamPlayers = []; 
+    window.matches = [];     
     window.matchData = {};
 
     // 탭 전환 함수 (비밀번호 340 제한 유지)
@@ -177,7 +178,6 @@
         const data = snapshot.val();
         window.allGroupData = data || {};
 
-        // 기본 초기화 구조 세팅 (구조 유연화)
         if (!window.allGroupData.groupA) {
             window.allGroupData.groupA = { teamCount: 4, teamNames: ["A조 1팀", "A조 2팀", "A조 3팀", "A조 4팀"], matchData: {} };
         }
@@ -189,21 +189,45 @@
         document.getElementById('loading').style.display = 'none';
     });
 
+    // 데이터를 안전하게 보정하여 에러 없이 연동시키는 핵심 함수
     function renderCurrentGroup() {
-        const groupData = window.allGroupData[window.currentGroup];
+        const groupData = window.allGroupData[window.currentGroup] || {};
         
         window.teamCount = groupData.teamCount || 4;
+        
+        // 1. 팀명 안전 확보
         window.teamNames = groupData.teamNames || [];
+        while (window.teamNames.length < window.teamCount) {
+            window.teamNames.push(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} ${window.teamNames.length + 1}팀`);
+        }
+        
+        // 2. 복식 명단 데이터 유효성 검사 및 초기값 강제 맵핑 (에러 방지 안전장치)
+        window.teamPlayers = groupData.teamPlayers || [];
+        while (window.teamPlayers.length < window.teamCount) {
+            window.teamPlayers.push({ d1: ["", ""], d2: ["", ""], d3: ["", ""] });
+        }
+        for (let i = 0; i < window.teamCount; i++) {
+            if (!window.teamPlayers[i]) window.teamPlayers[i] = { d1: ["", ""], d2: ["", ""], d3: ["", ""] };
+            if (!window.teamPlayers[i].d1) window.teamPlayers[i].d1 = ["", ""];
+            if (!window.teamPlayers[i].d2) window.teamPlayers[i].d2 = ["", ""];
+            if (!window.teamPlayers[i].d3) window.teamPlayers[i].d3 = ["", ""];
+            // 각 배열 내 요소 스트링화 보장
+            if (window.teamPlayers[i].d1[0] === undefined) window.teamPlayers[i].d1[0] = "";
+            if (window.teamPlayers[i].d1[1] === undefined) window.teamPlayers[i].d1[1] = "";
+            if (window.teamPlayers[i].d2[0] === undefined) window.teamPlayers[i].d2[0] = "";
+            if (window.teamPlayers[i].d2[1] === undefined) window.teamPlayers[i].d2[1] = "";
+            if (window.teamPlayers[i].d3[0] === undefined) window.teamPlayers[i].d3[0] = "";
+            if (window.teamPlayers[i].d3[1] === undefined) window.teamPlayers[i].d3[1] = "";
+        }
+
         window.matchData = groupData.matchData || {};
         
-        // 선수 데이터 구조 안전하게 불러오기 및 생성
-        window.teamPlayers = groupData.teamPlayers || Array.from({length: window.teamCount}, () => ({
-            d1: ["", ""], d2: ["", ""], d3: ["", ""]
-        }));
-
-        // 대진 데이터 구조 안전하게 불러오기 (없으면 자동 라운드로빈 생성)
+        // 3. 대진 리스트 검사 (구버전 호환용으로 코트 필드가 없으면 공백 추가)
         if (groupData.matches && groupData.matches.length > 0) {
-            window.matches = groupData.matches;
+            window.matches = groupData.matches.map(m => {
+                if (m.length < 3) m.push(""); // 세번째 요소(코트)가 없으면 생성
+                return m;
+            });
         } else {
             generateDefaultMatchSchedule();
         }
@@ -217,7 +241,6 @@
         calculateRank();
     }
 
-    // 기본 라운드로빈 대진 생성 함수 (코트값 기본 공백처리)
     function generateDefaultMatchSchedule() {
         window.matches = [];
         for (let i = 0; i < window.teamCount; i++) {
@@ -225,32 +248,32 @@
         }
     }
 
-    // 팀 이름 및 1, 2, 3복식 선수 입력 화면 렌더링
+    // 팀 이름 및 복식 명단(각 2명) 입력 레이아웃 렌더링
     function renderTeamInputs() {
         const container = document.getElementById('teamNameInputs');
         container.innerHTML = window.teamNames.map((name, i) => {
-            const p = window.teamPlayers[i] || { d1: ["", ""], d2: ["", ""], d3: ["", ""] };
+            const p = window.teamPlayers[i];
             return `
-                <div style="border: 1px solid #ccd0d5; padding: 12px; border-radius: 8px; background: #fff;">
-                    <span style="font-weight:bold; color:#0f9d58; font-size:0.9em; display:block; margin-bottom:5px;">팀 ${i+1} 이름</span>
-                    <input type="text" id="t-input-${i}" value="${name}" oninput="window.updateTeamNameMemory(${i}, this.value)" style="width:90%; font-weight:bold; margin-bottom:8px;">
+                <div class="team-card">
+                    <span style="font-weight:bold; color:#0f9d58; font-size:0.95em; display:block; margin-bottom:5px;">팀 ${i+1} 이름</span>
+                    <input type="text" id="t-input-${i}" value="${name}" oninput="window.updateTeamNameMemory(${i}, this.value)" style="width:95%; font-weight:bold; margin-bottom:8px; padding:6px; border:1px solid #ccd0d5; border-radius:4px;">
                     
                     <div class="player-inputs-box">
-                        <div style="font-weight:bold; margin-bottom:5px; color:#606770; font-size:0.85em;">👥 복식 선수 명단 등록</div>
+                        <div style="font-weight:bold; margin-bottom:6px; color:#606770; font-size:0.85em;">👥 복식 선수 명단 등록 (각 조 2명씩 입력)</div>
                         <div class="player-row">
                             <span>1복식</span>
-                            <input type="text" value="${p.d1?.[0] || ''}" oninput="window.updatePlayerMemory(${i}, 'd1', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d1?.[1] || ''}" oninput="window.updatePlayerMemory(${i}, 'd1', 1, this.value)" placeholder="선수 2">
+                            <input type="text" value="${p.d1[0]}" oninput="window.updatePlayerMemory(${i}, 'd1', 0, this.value)" placeholder="선수 1">
+                            <input type="text" value="${p.d1[1]}" oninput="window.updatePlayerMemory(${i}, 'd1', 1, this.value)" placeholder="선수 2">
                         </div>
                         <div class="player-row">
                             <span>2복식</span>
-                            <input type="text" value="${p.d2?.[0] || ''}" oninput="window.updatePlayerMemory(${i}, 'd2', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d2?.[1] || ''}" oninput="window.updatePlayerMemory(${i}, 'd2', 1, this.value)" placeholder="선수 2">
+                            <input type="text" value="${p.d2[0]}" oninput="window.updatePlayerMemory(${i}, 'd2', 0, this.value)" placeholder="선수 1">
+                            <input type="text" value="${p.d2[1]}" oninput="window.updatePlayerMemory(${i}, 'd2', 1, this.value)" placeholder="선수 2">
                         </div>
                         <div class="player-row">
                             <span>3복식</span>
-                            <input type="text" value="${p.d3?.[0] || ''}" oninput="window.updatePlayerMemory(${i}, 'd3', 0, this.value)" placeholder="선수 1">
-                            <input type="text" value="${p.d3?.[1] || ''}" oninput="window.updatePlayerMemory(${i}, 'd3', 1, this.value)" placeholder="선수 2">
+                            <input type="text" value="${p.d3[0]}" oninput="window.updatePlayerMemory(${i}, 'd3', 0, this.value)" placeholder="선수 1">
+                            <input type="text" value="${p.d3[1]}" oninput="window.updatePlayerMemory(${i}, 'd3', 1, this.value)" placeholder="선수 2">
                         </div>
                     </div>
                 </div>
@@ -261,16 +284,14 @@
     window.updateTeamNameMemory = function(index, value) {
         const prefix = window.currentGroup === 'groupA' ? 'A조' : 'B조';
         window.teamNames[index] = value || `${prefix} ${index+1}팀`;
-        renderSetupMatchOrder(); // 대진 설정창 내 셀렉트 박스 이름 자동 실시간 동기화
+        renderSetupMatchOrder(); 
     }
 
     window.updatePlayerMemory = function(teamIdx, doublesKey, playerIdx, value) {
-        if (!window.teamPlayers[teamIdx]) window.teamPlayers[teamIdx] = { d1: ["", ""], d2: ["", ""], d3: ["", ""] };
-        if (!window.teamPlayers[teamIdx][doublesKey]) window.teamPlayers[teamIdx][doublesKey] = ["", ""];
         window.teamPlayers[teamIdx][doublesKey][playerIdx] = value;
     }
 
-    // 대회설정 탭 내에 대진순서 및 코트번호 조절 기능 렌더링
+    // 대회설정 탭 내에 대진순서 및 코트 배정 조절 관리 렌더링
     function renderSetupMatchOrder() {
         const container = document.getElementById('setupMatchOrder');
         let html = `<div style="margin-bottom:12px; font-size:0.85em; color:#606770;">각 경기 순서에 따라 대결할 팀들과 지정 코트를 입력해 주세요.</div>`;
@@ -278,7 +299,7 @@
         window.matches.forEach((match, idx) => {
             let options1 = window.teamNames.map((name, tIdx) => `<option value="${tIdx}" ${match[0] == tIdx ? 'selected' : ''}>${name}</option>`).join('');
             let options2 = window.teamNames.map((name, tIdx) => `<option value="${tIdx}" ${match[1] == tIdx ? 'selected' : ''}>${name}</option>`).join('');
-            let courtValue = match[2] || ''; // 코트 데이터 불러오기
+            let courtValue = match[2] || ''; 
             
             html += `
                 <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; background:#f8f9fa; padding:6px; border-radius:6px;">
@@ -287,7 +308,7 @@
                     <span style="font-weight:bold; color:#0f9d58; font-size:0.85em;">VS</span>
                     <select onchange="window.changeMatchTeam(${idx}, 1, this.value)" style="flex:1; padding:6px; font-size:0.9em; border:1px solid #ccd0d5; border-radius:4px;">${options2}</select>
                     
-                    <input type="text" value="${courtValue}" placeholder="코트" oninput="window.changeMatchCourt(${idx}, this.value)" style="width:45px; padding:5px; font-size:0.85em; text-align:center; border:1px solid #ccd0d5; border-radius:4px;" title="예: 1, 2 또는 A">
+                    <input type="text" value="${courtValue}" placeholder="코트" oninput="window.changeMatchCourt(${idx}, this.value)" style="width:45px; padding:5px; font-size:0.85em; text-align:center; border:1px solid #ccd0d5; border-radius:4px;" title="예: 1, 2 또는 가, 나">
                     
                     <button onclick="window.deleteMatchFromSetup(${idx})" style="background:#f02849; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:0.8em; cursor:pointer;">삭제</button>
                 </div>
@@ -307,7 +328,6 @@
         window.matches[matchIdx][teamPos] = parseInt(teamIdx);
     }
 
-    // 메모리에 실시간으로 코트 정보 반영 기능 추가
     window.changeMatchCourt = function(matchIdx, courtValue) {
         window.matches[matchIdx][2] = courtValue;
     }
@@ -318,18 +338,18 @@
     }
 
     window.addMatchToSetup = function() {
-        window.matches.push([0, 1, ""]); // 기본값으로 1팀 vs 2팀, 코트 미지정으로 생성
+        window.matches.push([0, 1, ""]); 
         renderSetupMatchOrder();
     }
 
     window.resetToDefaultMatches = function() {
-        if(confirm("현재 조의 팀 수 기준인 기본 전체 라운드로빈 대진순서로 자동 재생성하시겠습니까? (입력해 둔 코트정보는 유실됩니다.)")) {
+        if(confirm("현재 조의 팀 수 기준인 기본 전체 라운드로빈 대진순서로 자동 재생성하시겠습니까? (기존에 타이핑 해둔 코트정보는 리셋됩니다.)")) {
             generateDefaultMatchSchedule();
             renderSetupMatchOrder();
         }
     }
 
-    // 결과 입력란 및 선수 가이드라인 표시 렌더링 (상단에 코트 표시 적용)
+    // 경기결과 점수 입력 화면 렌더링 (코트 정보 매핑)
     function renderMatches() {
         const matchList = document.getElementById('matchList');
         matchList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">🎾 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 결과 입력</h3>`;
@@ -337,12 +357,13 @@
         window.matches.forEach((match, mIdx) => {
             const t1 = match[0];
             const t2 = match[1];
-            const courtText = match[2] ? ` - ${match[2]}코트` : ' - 코트 미지정';
+            const courtText = match[2] ? ` - ${match[2]}코트` : ' - 코트 미배정';
             const scores = window.matchData[mIdx] || [[0,0], [0,0], [0,0]];
             
             const getNames = (teamIdx, dKey) => {
-                const names = window.teamPlayers[teamIdx]?.[dKey];
-                if (!names || (!names[0] && !names[1])) return "선수 미등록";
+                if (!window.teamPlayers[teamIdx] || !window.teamPlayers[teamIdx][dKey]) return "선수 미등록";
+                const names = window.teamPlayers[teamIdx][dKey];
+                if (!names[0] && !names[1]) return "선수 미등록";
                 return `${names[0] || '미정'}/${names[1] || '미정'}`;
             };
 
@@ -375,12 +396,11 @@
         });
     }
 
-    // 대진순서 탭 화면 그리기 (코트 배지 표기 스타일 적용)
+    // 대진순서 탭 화면에 코트 정보 표시 추가
     function renderOrder() {
         const orderList = document.getElementById('orderList');
         orderList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">📅 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 대진 순서</h3>`;
         orderList.innerHTML += window.matches.map((m, i) => {
-            // 코트가 등록되어 있으면 깔끔한 초록색 배지로 표기
             const courtBadge = m[2] ? `<span style="background:#e6f4ea; color:#0f9d58; padding:3px 8px; border-radius:20px; font-size:0.8em; font-weight:bold; margin-left:8px; display:inline-block;">${m[2]}코트</span>` : '';
             return `
                 <div class="order-item">
@@ -399,7 +419,7 @@
         if (input.value > 6) input.value = 6;
     }
 
-    // 대회설정, 선수명단, 대진순서(코트 포함) 전체 저장
+    // 대회설정, 팀명, 복식명단, 대진순서, 코트번호 동시 원스톱 저장 로직
     window.saveConfigToFirebase = function() {
         const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
         set(groupSpecificRef, {
@@ -408,11 +428,10 @@
             teamPlayers: window.teamPlayers,
             matches: window.matches,
             matchData: window.matchData
-        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 설정 및 대진 정보(코트 포함)가 서버에 통합 저장되었습니다!`))
+        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 설정, 선수명단 및 대진 코트 정보가 서버에 통합 동기화되었습니다!`))
           .catch(err => alert("저장 실패: " + err));
     }
 
-    // 경기결과 점수 서버 저장
     window.saveScoresToFirebase = function() {
         document.querySelectorAll('#matchList .card').forEach((card) => {
             const mIdx = card.getAttribute('data-match-index');
@@ -432,7 +451,6 @@
           .catch(err => alert("저장 실패: " + err));
     }
 
-    // 팀 수 변경 처리시 초기화 통합 유도
     window.changeTeamCount = function() {
         const newCount = parseInt(document.getElementById('teamCount').value);
         const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
@@ -456,7 +474,6 @@
         }
     }
 
-    // 순위 및 승점 계산 logic
     function calculateRank() {
         let stats = window.teamNames.map(name => ({ name, win: 0, loss: 0, points: 0, diff: 0 }));
 
@@ -485,7 +502,6 @@
         `).join('');
     }
 
-    // 데이터 초기화 기능 (기본 대진 배열 생성 구조 대응)
     window.resetFirebaseData = function() {
         const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
         if(confirm("지금까지 입력한 모든 자료가 지워집니다. 그래도 초기화하시겠습니까?")) {
