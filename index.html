@@ -141,7 +141,7 @@
         "공단연합": ["정강모, 김영선", "황재건, 안성국", "우정우, 한현주"],
         "대구본부": ["박재흠, 우길제", "심상명, 백귀영", "곽수길, 김기현"],
         "대전본부": ["주영수, 김철희", "양진호, 황준우", "김서용, 김병훈"],
-        "대구경기요양태백연합": ["문택준, 김재현", "이능교, 이종필", "남승원, 서상협"],
+        "대구경기태백병원": ["문택준, 김재현", "이능교, 이종필", "남승원, 서상협"],
         "인천안산병원": ["이현석, 김규하", "이경동, 김영한", "류용석, 김경민"],
         "대전병원A": ["강규섭, 정욱재", "고윤석, 이상억", "권현주, 김부근"],
         "대전병원B": ["이동근, 김병규", "최형복, 김연진", "김기, 김수찬"]
@@ -248,7 +248,7 @@
         window.teamNames[index] = value || `${prefix} ${index+1}팀`;
     }
 
-    // [수정 완료] 결과 입력 화면 - 줄바꿈 및 너비 강제 고정 레이아웃
+    // [수정 완료] 결과 입력 화면 - 쉼표 제거 후 줄바꿈 레이아웃
     function renderMatches() {
         const matchList = document.getElementById('matchList');
         matchList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">🎾 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 결과 입력</h3>`;
@@ -268,9 +268,9 @@
                         const p1 = playerDatabase[t1Name] ? playerDatabase[t1Name][sIdx] : '선수 미등록';
                         const p2 = playerDatabase[t2Name] ? playerDatabase[t2Name][sIdx] : '선수 미등록';
                         
-                        // 쉼표 뒤에 줄바꿈(<br>) 코드를 삽입하여 강제로 2줄 출력 유도
-                        const p1Formatted = p1.replace(', ', ',<br>');
-                        const p2Formatted = p2.replace(', ', ',<br>');
+                        // 쉼표와 공백(, )을 완전히 지우고 줄바꿈(<br>)으로만 대체
+                        const p1Formatted = p1.replace(', ', '<br>');
+                        const p2Formatted = p2.replace(', ', '<br>');
                         
                         return `
                         <div class="input-group" style="display: block; padding-bottom: 10px; margin-bottom: 12px;">
