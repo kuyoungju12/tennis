@@ -264,7 +264,7 @@
             matchList.innerHTML += `
                 <div class="card" data-match-index="${mIdx}">
                     <span style="font-weight:bold; color:#606770;">제 ${mIdx + 1}경기</span>
-                    <div style="margin: 10px 0 15px 0; font-size:1.15em; font-weight:bold; color:#0f9d58; text-align:center; border-bottom:1px solid #f0f2f5; padding-bottom:8px;">
+                    <div style="margin: 10px 0 15px 0; font-size:1.05em; font-weight:bold; color:#0f9d58; text-align:center; border-bottom:1px solid #f0f2f5; padding-bottom:8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                         ${t1Name} <small style="color:#999; font-weight:normal; margin:0 5px;">VS</small> ${t2Name}
                     </div>
                     ${[0,1,2].map(sIdx => {
@@ -296,19 +296,16 @@
         });
     }
 
-    // [수정 완료] 대진 순서 화면 - 조별/경기회차별 코트 번호 자동 출력 레이아웃
+    // 대진 순서 화면
     function renderOrder() {
         const orderList = document.getElementById('orderList');
         orderList.innerHTML = `<h3 style="background:white; padding:15px; border-radius:10px;">📅 ${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 경기 대진 순서</h3>`;
         orderList.innerHTML += window.matches.map((m, i) => {
             
-            // 현재 선택된 조와 경기 인덱스(i) 조합으로 코트 명칭 동적 연산
             let courtText = '';
             if (window.currentGroup === 'groupA') {
-                // A조: 1,3,5경기는 9/10번, 2,4,6경기는 1/2번
                 courtText = (i % 2 === 0) ? '코트 9/10번' : '코트 1/2번';
             } else {
-                // B조: 1,3,5경기는 3/4번, 2,4,6경기는 5/6번
                 courtText = (i % 2 === 0) ? '코트 3/4번' : '코트 5/6번';
             }
 
@@ -319,12 +316,12 @@
                     <span style="color:#0f9d58; font-size: 0.75em; font-weight: bold; letter-spacing: -0.03em;">📍 ${courtText}</span>
                 </div>
                 
-                <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 4px; font-weight: bold;">
-                    <span style="flex: 1; text-align: right; font-size: 1em; line-height: 1.2; word-break: break-all;">${window.teamNames[m[0]] || '미지정'}</span>
+                <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 4px; font-weight: bold; overflow: hidden;">
+                    <span style="flex: 1; text-align: right; font-size: 0.85em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window.teamNames[m[0]] || '미지정'}</span>
                     
-                    <span style="color:#0f9d58; margin: 0 8px; font-size: 0.85em; flex: 0 0 auto;">VS</span>
+                    <span style="color:#0f9d58; margin: 0 4px; font-size: 0.8em; flex: 0 0 auto;">VS</span>
                     
-                    <span style="flex: 1; text-align: left; font-size: 1em; line-height: 1.2; word-break: break-all;">${window.teamNames[m[1]] || '미지정'}</span>
+                    <span style="flex: 1; text-align: left; font-size: 0.85em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window.teamNames[m[1]] || '미지정'}</span>
                 </div>
             </div>
             `;
@@ -355,84 +352,3 @@
         });
 
         const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
-        set(groupSpecificRef, {
-            teamCount: window.teamCount,
-            teamNames: window.teamNames,
-            matchData: window.matchData
-        }).then(() => alert(`${window.currentGroup === 'groupA' ? 'A조' : 'B조'} 결과가 실시간으로 서버에 저장 및 브로드캐스팅 되었습니다!`))
-          .catch(err => alert("저장 실패: " + err));
-    }
-
-    window.changeTeamCount = function() {
-        const newCount = parseInt(document.getElementById('teamCount').value);
-        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
-        if (confirm(`${groupText}의 팀 수를 변경하면 해당 조의 기존 점수 데이터가 모두 초기화됩니다. 변경할까요?`)) {
-            window.teamCount = newCount;
-            if(window.teamCount === 4) {
-                window.teamNames = window.currentGroup === 'groupA' 
-                    ? ["공단본부", "공단연합", "대구본부", "대전본부"] 
-                    : ["대구경기요양태백연합", "인천안산병원", "대전병원A", "대전병원B"];
-            } else {
-                window.teamNames = Array.from({length: window.teamCount}, (_, i) => `${groupText} ${i+1}팀`);
-            }
-            window.matchData = {};
-            
-            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
-            set(groupSpecificRef, {
-                teamCount: window.teamCount,
-                teamNames: window.teamNames,
-                matchData: window.matchData
-            });
-        } else {
-            document.getElementById('teamCount').value = window.teamCount;
-        }
-    }
-
-    function calculateRank() {
-        let stats = window.teamNames.map(name => ({ name, win: 0, loss: 0, points: 0, diff: 0 }));
-
-        window.matches.forEach((match, mIdx) => {
-            const scores = window.matchData[mIdx];
-            if (!scores || !stats[match[0]] || !stats[match[1]]) return;
-            let t1W = 0, t2W = 0, t1G = 0, t2G = 0;
-            scores.forEach(s => {
-                t1G += s[0]; t2G += s[1];
-                if (s[0] > s[1]) t1W++; else if (s[1] > s[0]) t2W++;
-            });
-            if (t1W > t2W) { stats[match[0]].win++; stats[match[0]].points += 3; stats[match[1]].loss++; }
-            else if (t2W > t1W) { stats[match[1]].win++; stats[match[1]].points += 3; stats[match[0]].loss++; }
-            stats[match[0]].diff += (t1G - t2G);
-            stats[match[1]].diff += (t2G - t1G);
-        });
-
-        stats.sort((a, b) => b.win - a.win || b.points - a.points || b.diff - a.diff);
-        document.getElementById('rankBody').innerHTML = stats.map(s => `
-            <tr>
-                <td><strong>${s.name}</strong></td>
-                <td>${s.win}승 ${s.loss}패</td>
-                <td>${s.points}</td>
-                <td style="color: ${s.diff > 0 ? '#0f9d58' : s.diff < 0 ? '#f02849' : '#1c1e21'}">${s.diff > 0 ? '+' + s.diff : s.diff}</td>
-            </tr>
-        `).join('');
-    }
-
-    window.resetFirebaseData = function() {
-        const groupText = window.currentGroup === 'groupA' ? 'A조' : 'B조';
-        if(confirm("지금까지 입력한 모든 자료가 지워집니다. 그래도 초기화하시겠습니까?")) {
-            const groupSpecificRef = ref(db, `tennis_tournament/${window.currentGroup}`);
-            const defaultData = {
-                teamCount: 4,
-                teamNames: window.currentGroup === 'groupA' 
-                    ? ["공단본부", "공단연합", "대구본부", "대전본부"] 
-                    : ["대구경기요양태백연합", "인천안산병원", "대전병원A", "대전병원B"],
-                matchData: {}
-            };
-            set(groupSpecificRef, defaultData).then(() => {
-                alert(`${groupText} 데이터가 완전히 초기화되었습니다.`);
-                window.openTab('order');
-            });
-        }
-    }
-</script>
-</body>
-</html>
